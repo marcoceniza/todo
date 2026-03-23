@@ -6,7 +6,6 @@ import { RouterLink, RouterView } from 'vue-router'
   <header class="bg-blue-500 h-[50px]">
     <nav class="hidden">
       <RouterLink to="/">Home</RouterLink>
-      <RouterLink to="/about">About</RouterLink>
     </nav>
   </header>
 

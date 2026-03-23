@@ -11,8 +11,7 @@ defineProps({
     textarea: { type: Boolean, default: false },
     modelValue: { type: String, default: '' },
     newTitle: { type: String },
-    updateData: { type: Object },
-    clearFieldHandler: { type: Function }
+    updateData: { type: Object }
 });
 
 const emit = defineEmits(['update:modelValue'])
@@ -33,9 +32,9 @@ const { update } = useTodoStore();
             @input="emit('update:modelValue', $event.target.value)"
             v-bind="$attrs"
         >
-        <div v-show="updateData.icon">
-            <CheckIcon @click="update(updateData.id, newTitle, updateData.icon = false, clearFieldHandler())" class="size-5 text-green-500 hover:text-green-700 cursor-pointer absolute top-4 right-12" />
-            <XMarkIcon @click="updateData.icon = false, clearFieldHandler()" class="size-5 text-red-500 hover:text-red-700 cursor-pointer absolute top-4 right-5" />
+        <div v-show="updateData.isEditing">
+            <CheckIcon @click="update(updateData.id, newTitle)" class="size-5 text-green-500 hover:text-green-700 cursor-pointer absolute top-4 right-12" />
+            <XMarkIcon @click="updateData.isEditing = false" class="size-5 text-red-500 hover:text-red-700 cursor-pointer absolute top-4 right-5" />
         </div>
     </div>
 </template>

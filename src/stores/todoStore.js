@@ -1,69 +1,126 @@
 import { defineStore } from 'pinia';
-import axios from 'axios';
 import { ref } from 'vue';
+import api from '@/lib/axios';
 
 export const useTodoStore = defineStore('todo', () => {
   const todos = ref([]);
-  const urlLink = 'https://todo.mc-dev.site/api-v1/api';
+  const errors = ref({});
+  const loading = ref({ fetch: false, create: false, update: false, delete: false, favorite: false, completed: false });
+  const updateData = ref({ id: null, isEditing: false });
+  const setEdit = (todo) =>{ updateData.value.id = todo.id; updateData.value.isEditing = true };
+  const clearEdit = () =>{ updateData.value.id = null; updateData.value.isEditing = false };
 
   const index = async () => {
     try {
-      const res = await axios.get(`${urlLink}/todos`);
-
-      todos.value = res.data.result
-    }catch(error) {
+      loading.value.fetch = true;
+      const res = await api.get('/api/todos');
+      todos.value = res.data.result;
+    } catch(error) {
       console.error(error);
+    } finally {
+      loading.value.fetch = false;
     }
   }
 
   const store = async (formData) => {
     try {
-      await axios.post(`${urlLink}/todos`, formData);
+      loading.value.create = true;
+      const res = await api.post('/api/todos', formData);
+      const newTodo = { completed: 0, favorite: 0, ...res.data.result };
 
+      todos.value.unshift(newTodo);
       formData.title = '';
-      await index();
-    }catch(error) {
-      console.error(error);
+      clearEdit();
+    } catch (error) {
+      if (error.response?.status === 422) {
+        errors.value = error.response.data.errors;
+      } else {
+        console.error("Something went wrong");
+      }
+    } finally {
+      loading.value.create = false;
     }
-  }
+  };
 
-  const update = async (id, title) => {
+  const update = async (id, formData) => {
     try {
-      await axios.put(`${urlLink}/todos/${id}`, { title: title });
+      const { data: res } = await api.put(`/api/todos/${id}`, {
+        title: formData
+      });
 
-      title = '';
-      await index();
-    }catch(error) {
-      console.log(error);
+      // sync local list
+      const todo = todos.value.find(t => t.id === id);
+      if (todo) Object.assign(todo, res.result);
+
+      clearEdit();
+    } catch (error) {
+      if (error.response?.status === 422) {
+        errors.value = error.response.data.errors;
+      } else {
+        console.error("Something went wrong");
+      }
+    } finally {
+      console.log('Update todo completed');
     }
-  }
+  };
 
   const destroy = async (id) => {
     try {
-      await axios.delete(`${urlLink}/todos/${id}`);
-      await index();
-    }catch(error) {
+      await api.delete(`/api/todos/${id}`);
+      todos.value = todos.value.filter(t => t.id !== id);
+    } catch(error) {
       console.log(error);
+    } finally {
+      loading.value.delete = false;
     }
   }
 
   const isFavorite = async (id) => {
     try {
-      await axios.post(`${urlLink}/favorite/${id}`);
-      await index();
-    }catch(error) {
+      loading.value.favorite = true;
+      const res = await api.post(`/api/favorite/${id}`);
+
+      const index = todos.value.findIndex(t => t.id === id);
+      if (index !== -1) {
+        todos.value[index] = { ...todos.value[index], ...res.data.result };
+      }
+      
+    } catch(error) {
       console.error(error);
+    } finally {
+      loading.value.favorite = false;
     }
   }
 
   const isCompleted = async (id) => {
     try {
-      await axios.post(`${urlLink}/completed/${id}`);
-      index();
-    }catch(error) {
-      console.error(error);
-    }
-  }
+      loading.value.completed = true;
+      const res = await api.post(`/api/completed/${id}`);
 
-  return { store, index, update, destroy, todos, isFavorite, isCompleted }
+      const index = todos.value.findIndex(t => t.id === id);
+      if (index !== -1) {
+        todos.value[index] = { ...todos.value[index], ...res.data.result };
+      }
+
+    } catch(error) {
+      console.error(error);
+    } finally {
+      loading.value.completed = false;
+    }
+  };
+
+  return {
+    store,
+    index,
+    update,
+    destroy,
+    todos,
+    isFavorite,
+    isCompleted,
+    updateData,
+    setEdit,
+    clearEdit,
+    errors,
+    loading
+  }
 })
