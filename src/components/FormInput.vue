@@ -15,7 +15,12 @@ defineProps({
 });
 
 const emit = defineEmits(['update:modelValue'])
-const { update } = useTodoStore();
+const { updateTodo, cancelUpdate } = useTodoStore();
+
+const clearEdit = () => {
+    emit('update:modelValue', '');
+    cancelUpdate();
+};
 
 </script>
 
@@ -33,8 +38,8 @@ const { update } = useTodoStore();
             v-bind="$attrs"
         >
         <div v-show="updateData.isEditing">
-            <CheckIcon @click="update(updateData.id, newTitle)" class="size-5 text-green-500 hover:text-green-700 cursor-pointer absolute top-4 right-12" />
-            <XMarkIcon @click="updateData.isEditing = false" class="size-5 text-red-500 hover:text-red-700 cursor-pointer absolute top-4 right-5" />
+            <CheckIcon @click="updateTodo(updateData.id, newTitle)" class="size-5 text-white bg-green-600 hover:bg-green-700 cursor-pointer absolute top-4 right-12" />
+            <XMarkIcon @click="clearEdit(); updateData.isEditing = false" class="size-5 text-white bg-red-600 hover:bg-red-700 cursor-pointer absolute top-4 right-5" />
         </div>
     </div>
 </template>

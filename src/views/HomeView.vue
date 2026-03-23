@@ -1,82 +1,87 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, provide, ref, watch } from 'vue';
 import FormInput from '@/components/FormInput.vue';
 import TodoList from '@/components/TodoList.vue';
 import { useTodoStore } from '@/stores/todoStore';
 import { storeToRefs } from 'pinia';
 
 const todoStore = useTodoStore();
-const { todos, updateData, loading } = storeToRefs(todoStore);
-
-const formData = reactive({ title: '' });
+const { todos, updateData, loading, title } = storeToRefs(todoStore);
+const { fetchTodos, createTodo, updateTodo, setEdit } = todoStore;
 const currentPage = ref(1);
 const itemsPerPage = 5;
 const activeFilter = ref('all');
-const emptyMessage = ref('');
 
-// Compute counts for each category
+const normalizedTodos = computed(() => {
+  return todos.value.map(todo => ({
+    ...todo,
+    completed: Number(todo.completed) === 1,
+    favorite: Number(todo.favorite) === 1,
+  }));
+});
+
 const counts = computed(() => {
-  const favorite = todos.value.filter(t => Number(t.favorite) === 1).length;
-  const completed = todos.value.filter(t => Number(t.completed) === 1).length;
-  const all = todos.value.filter(t => Number(t.completed) === 0 && Number(t.favorite) === 0).length;
+  const favorite = normalizedTodos.value.filter(t => t.favorite).length;
+  const completed = normalizedTodos.value.filter(t => t.completed).length;
+  const all = normalizedTodos.value.filter(t => !t.completed && !t.favorite).length;
   return { all, favorite, completed };
 });
 
-// Filter todos based on activeFilter
 const filteredTodos = computed(() => {
-  let filtered = todos.value || [];
+  if (!normalizedTodos.value) return [];
 
   if (activeFilter.value === 'favorite') {
-    filtered = filtered.filter(todo => Number(todo.favorite) === 1);
-    emptyMessage.value = filtered.length === 0 ? 'No Favorite' : '';
+    return normalizedTodos.value.filter(todo => todo.favorite);
   } else if (activeFilter.value === 'completed') {
-    filtered = filtered.filter(todo => Number(todo.completed) === 1);
-    emptyMessage.value = filtered.length === 0 ? 'No Completed' : '';
-  } else if (activeFilter.value === 'all') {
-    filtered = filtered.filter(todo => Number(todo.completed) === 0 && Number(todo.favorite) === 0);
-    emptyMessage.value = filtered.length === 0 ? 'No Data' : '';
+    return normalizedTodos.value.filter(todo => todo.completed);
+  } else {
+    return normalizedTodos.value.filter(todo => !todo.completed && !todo.favorite);
   }
-
-  return filtered;
 });
 
-// Reset current page when filter or data changes
-watch([activeFilter, filteredTodos], () => {
-  currentPage.value = 1;
+const emptyMessage = computed(() => {
+  if (!filteredTodos.value.length) {
+    if (activeFilter.value === 'favorite') return 'No Favorite';
+    if (activeFilter.value === 'completed') return 'No Completed';
+    return 'No Data';
+  }
+  return '';
 });
 
-// Pagination
 const paginatedTodos = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   return filteredTodos.value.slice(start, start + itemsPerPage);
 });
 
-// Total pages
+watch(activeFilter, () => {
+  currentPage.value = 1;
+});
+
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredTodos.value.length / itemsPerPage)));
 
-// Handlers
-const getIdHandler = ([id, title]) => {
-  formData.title = title;
-  todoStore.setEdit({ id });
+const getIdHandler = ([id, newTitle]) => {
+  title.value = newTitle;
+  setEdit({ id });
 };
 
 const submitHandler = () => {
   if (updateData.value.id) {
-    todoStore.update(updateData.value.id, formData.title);
+    updateTodo(updateData.value.id, title.value);
   } else {
-    todoStore.store(formData);
+    createTodo(title.value);
   }
 };
 
-onMounted(() => {
-  todoStore.index();
-});
+const clearEdit = () => title.value = '';
+
+provide('clearEdit', clearEdit);
+
+onMounted(() => fetchTodos() );
 </script>
 
 <template>
   <div class="container mx-auto mt-4">
     <div class="w-[500px] text-center mx-auto">
-      <!-- Header + Filter -->
       <div class="flex justify-between items-center">
         <h1 class="text-2xl my-4 font-semibold">Todo</h1>
         <ul class="flex gap-2 text-sm text-gray-600">
@@ -104,26 +109,35 @@ onMounted(() => {
         </ul>
       </div>
 
-      <!-- Form -->
-      <form @submit.prevent="submitHandler">
+      <form 
+        v-if="activeFilter === 'all' && !(updateData.value?.completed) && !(updateData.value?.favorite)" 
+        @submit.prevent="submitHandler"
+      >
         <FormInput
-          v-model="formData.title"
+          v-model="title"
           :updateData="updateData"
-          :newTitle="formData.title"
+          :newTitle="title"
           :class="{ 'cursor-not-allowed opacity-50': loading.create }"
         />
       </form>
 
-      <!-- Todo List -->
       <p v-if="loading.fetch" class="text-center text-gray-400 py-5 mb-4 border-b relative text-[15px]">Loading...</p>
       <p v-else-if="!filteredTodos.length" class="text-center text-gray-400 py-5 mb-4 border-b relative text-[15px]">{{ emptyMessage }}</p>
-      <div v-else>
-        <ul v-for="todo in paginatedTodos" :key="todo.id" class="mt-4 text-left">
-          <TodoList :todo="todo" @get-ID="getIdHandler" :activeFilter="activeFilter"/>
+      <div
+        v-else
+        :class="{ 'pointer-events-none cursor-not-allowed opacity-50': updateData.isEditing }"
+      >
+        <ul class="mt-4 text-left">
+          <li v-for="todo in paginatedTodos" :key="todo.id">
+            <TodoList 
+              :todo="todo" 
+              @get-ID="getIdHandler" 
+              :activeFilter="activeFilter"
+            />
+          </li>
         </ul>
       </div>
 
-      <!-- Pagination -->
       <div class="flex justify-center mt-6">
         <button 
           @click="currentPage--" 
